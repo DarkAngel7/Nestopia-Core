@@ -56,6 +56,10 @@ NSUInteger NESControlValues[] = { Nes::Api::Input::Controllers::Pad::UP, Nes::Ap
 };
 
 @implementation NESGameCore
+{
+    dispatch_source_t AATimer[4];
+    dispatch_source_t BBTimer[4];
+}
 
 @synthesize romPath;
 
@@ -654,12 +658,44 @@ static int Heights[2] =
 
 - (oneway void)didPushNESButton:(OENESButton)button forPlayer:(NSUInteger)player;
 {
-    controls->pad[player - 1].buttons |=  NESControlValues[button];
+        if (button == OENESButtonAA || button == OENESButtonBB) {
+        if (button == OENESButtonAA) {
+            AATimer[player - 1] = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0));
+            dispatch_source_set_timer(AATimer[player - 1], DISPATCH_TIME_NOW, .01 * NSEC_PER_SEC, 0 * NSEC_PER_SEC);
+            dispatch_source_set_event_handler(AATimer[player - 1], ^{
+                [self didPushNESButton:OENESButtonA forPlayer:player];
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(.005 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    [self didReleaseNESButton:OENESButtonA forPlayer:player];
+                });
+            });
+            dispatch_resume(AATimer[player - 1]);
+        } else {
+            BBTimer[player - 1] = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0));
+            dispatch_source_set_timer(BBTimer[player - 1], DISPATCH_TIME_NOW, .01 * NSEC_PER_SEC, 0 * NSEC_PER_SEC);
+            dispatch_source_set_event_handler(BBTimer[player - 1], ^{
+                [self didPushNESButton:OENESButtonB forPlayer:player];
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(.005 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    [self didReleaseNESButton:OENESButtonB forPlayer:player];
+                });
+            });
+            dispatch_resume(BBTimer[player - 1]);
+        }
+    } else {
+        controls->pad[player - 1].buttons |=  NESControlValues[button];
+    }
 }
 
 - (oneway void)didReleaseNESButton:(OENESButton)button forPlayer:(NSUInteger)player;
 {
-    controls->pad[player - 1].buttons &= ~NESControlValues[button];
+    if (button == OENESButtonAA || button == OENESButtonBB) {
+        if (button == OENESButtonAA) {
+            dispatch_cancel(AATimer[player - 1]);
+        } else {
+            dispatch_cancel(BBTimer[player - 1]);
+        }
+    } else {
+        controls->pad[player - 1].buttons &= ~NESControlValues[button];
+    }
 }
 
 - (oneway void)didTriggerGunAtPoint:(OEIntPoint)aPoint
